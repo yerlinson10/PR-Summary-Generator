@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Verificador de Permisos GitHub</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    
+    .container {
+      background: white;
+      border-radius: 16px;
+      padding: 40px;
+      max-width: 800px;
+      width: 100%;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    }
+    
+    h1 {
+      color: #333;
+      margin-bottom: 10px;
+      font-size: 28px;
+    }
+    
+    .subtitle {
+      color: #666;
+      margin-bottom: 30px;
+      font-size: 14px;
+    }
+    
+    button {
+      background: #667eea;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 16px;
+      cursor: pointer;
+      transition: all 0.3s;
+      margin-bottom: 20px;
+    }
+    
+    button:hover {
+      background: #5568d3;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+    
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+      transform: none;
+    }
+    
+    .result {
+      background: #f8f9fa;
+      border-radius: 8px;
+      padding: 20px;
+      margin-top: 20px;
+    }
+    
+    .success {
+      background: #d4edda;
+      border-left: 4px solid #28a745;
+      color: #155724;
+    }
+    
+    .error {
+      background: #f8d7da;
+      border-left: 4px solid #dc3545;
+      color: #721c24;
+    }
+    
+    .warning {
+      background: #fff3cd;
+      border-left: 4px solid #ffc107;
+      color: #856404;
+    }
+    
+    .info {
+      background: #d1ecf1;
+      border-left: 4px solid #17a2b8;
+      color: #0c5460;
+    }
+    
+    .result h3 {
+      margin-bottom: 15px;
+      font-size: 18px;
+    }
+    
+    .result ul {
+      margin-left: 20px;
+      line-height: 1.8;
+    }
+    
+    .result li {
+      margin-bottom: 8px;
+    }
+    
+    .badge {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: bold;
+      margin-left: 8px;
+    }
+    
+    .badge.success {
+      background: #28a745;
+      color: white;
+    }
+    
+    .badge.error {
+      background: #dc3545;
+      color: white;
+    }
+    
+    pre {
+      background: #2d2d2d;
+      color: #f8f8f2;
+      padding: 15px;
+      border-radius: 6px;
+      overflow-x: auto;
+      font-size: 13px;
+      line-height: 1.5;
+      margin-top: 10px;
+    }
+    
+    .loading {
+      text-align: center;
+      padding: 20px;
+      color: #667eea;
+    }
+    
+    .spinner {
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid #667eea;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin: 20px auto;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔍 Verificador de Permisos GitHub</h1>
+    <p class="subtitle">Verifica que tu token tenga todos los permisos necesarios</p>
+    
+    <button id="checkBtn" onclick="checkPermissions()">Verificar Permisos</button>
+    
+    <div id="results"></div>
+  </div>
+
+  <script>
+    async function checkPermissions() {
+      const btn = document.getElementById('checkBtn');
+      const resultsDiv = document.getElementById('results');
+      
+      btn.disabled = true;
+      resultsDiv.innerHTML = '<div class="loading"><div class="spinner"></div>Verificando permisos...</div>';
+      
+      try {
+        // Obtener token desde localStorage
+        const token = localStorage.getItem('github_token');
+        
+        if (!token) {
+          resultsDiv.innerHTML = `
+            <div class="result error">
+              <h3>❌ No hay token</h3>
+              <p>No se encontró un token de GitHub en localStorage. Por favor, inicia sesión primero.</p>
+            </div>
+          `;
+          btn.disabled = false;
+          return;
+        }
+        
+        // Verificar token y scopes
+        const response = await fetch('https://api.github.com/user', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/vnd.github.v3+json'
+          }
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const user = await response.json();
+        const scopes = response.headers.get('x-oauth-scopes') || '';
+        const scopeList = scopes.split(',').map(s => s.trim()).filter(Boolean);
+        
+        // Verificar repos del usuario
+        const reposResponse = await fetch('https://api.github.com/user/repos?per_page=5&affiliation=owner,collaborator,organization_member', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/vnd.github.v3+json'
+          }
+        });
+        
+        const repos = await reposResponse.json();
+        
+        // Verificar organizaciones
+        const orgsResponse = await fetch('https://api.github.com/user/orgs', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/vnd.github.v3+json'
+          }
+        });
+        
+        const orgs = await orgsResponse.json();
+        
+        // Análisis de resultados
+        const requiredScopes = ['repo', 'read:user', 'user:email', 'read:org'];
+        const missingScopes = requiredScopes.filter(scope => !scopeList.includes(scope));
+        const hasAllScopes = missingScopes.length === 0;
+        
+        let html = `
+          <div class="result ${hasAllScopes ? 'success' : 'warning'}">
+            <h3>${hasAllScopes ? '✅' : '⚠️'} Usuario Autenticado</h3>
+            <p><strong>Usuario:</strong> @${user.login}</p>
+            <p><strong>Nombre:</strong> ${user.name || 'No especificado'}</p>
+            <p><strong>Email:</strong> ${user.email || 'No disponible'}</p>
+          </div>
+          
+          <div class="result ${hasAllScopes ? 'success' : 'error'}">
+            <h3>${hasAllScopes ? '✅' : '❌'} Scopes (Permisos)</h3>
+            <p><strong>Scopes actuales:</strong></p>
+            <ul>
+              ${scopeList.map(scope => `
+                <li>${scope} <span class="badge success">OK</span></li>
+              `).join('')}
+            </ul>
+            
+            ${missingScopes.length > 0 ? `
+              <p style="margin-top: 15px;"><strong>⚠️ Scopes faltantes:</strong></p>
+              <ul>
+                ${missingScopes.map(scope => `
+                  <li>${scope} <span class="badge error">FALTA</span></li>
+                `).join('')}
+              </ul>
+              <p style="margin-top: 15px; font-weight: bold;">
+                🔧 Acción necesaria: Revoca el acceso y vuelve a loguear para obtener estos permisos.
+              </p>
+            ` : ''}
+          </div>
+          
+          <div class="result info">
+            <h3>📦 Repositorios</h3>
+            <p><strong>Primeros 5 repositorios encontrados:</strong></p>
+            <ul>
+              ${repos.slice(0, 5).map(repo => `
+                <li>
+                  ${repo.full_name} 
+                  ${repo.private ? '<span class="badge" style="background: #ffc107;">🔒 Privado</span>' : '<span class="badge" style="background: #28a745;">🌐 Público</span>'}
+                  ${repo.owner.type === 'Organization' ? '<span class="badge" style="background: #17a2b8;">🏢 Org</span>' : ''}
+                </li>
+              `).join('')}
+            </ul>
+            ${repos.length === 0 ? '<p style="color: #dc3545;">⚠️ No se encontraron repositorios</p>' : ''}
+          </div>
+          
+          <div class="result info">
+            <h3>🏢 Organizaciones</h3>
+            ${orgs.length > 0 ? `
+              <p><strong>Organizaciones (${orgs.length}):</strong></p>
+              <ul>
+                ${orgs.map(org => `<li>@${org.login}</li>`).join('')}
+              </ul>
+            ` : '<p>No perteneces a ninguna organización o no tienes el scope <code>read:org</code></p>'}
+          </div>
+          
+          <div class="result info">
+            <h3>🔍 Detalles Técnicos</h3>
+            <pre>${JSON.stringify({
+              token: token.substring(0, 10) + '...' + token.substring(token.length - 10),
+              scopes: scopeList,
+              missingScopes: missingScopes,
+              hasAllScopes: hasAllScopes,
+              reposCount: repos.length,
+              orgsCount: orgs.length
+            }, null, 2)}</pre>
+          </div>
+        `;
+        
+        if (!hasAllScopes) {
+          html += `
+            <div class="result error">
+              <h3>🔧 Cómo Solucionar</h3>
+              <ol style="margin-left: 20px; line-height: 2;">
+                <li>Ve a: <a href="https://github.com/settings/applications" target="_blank">https://github.com/settings/applications</a></li>
+                <li>Busca "PR Summary Generator"</li>
+                <li>Click en "Revoke access"</li>
+                <li>En la consola ejecuta: <code>localStorage.clear()</code></li>
+                <li>Vuelve a loguear en la aplicación</li>
+                <li>Autoriza TODOS los permisos que pida GitHub</li>
+                <li>Vuelve a verificar aquí</li>
+              </ol>
+            </div>
+          `;
+        }
+        
+        resultsDiv.innerHTML = html;
+        
+      } catch (error) {
+        resultsDiv.innerHTML = `
+          <div class="result error">
+            <h3>❌ Error</h3>
+            <p>${error.message}</p>
+            <pre>${error.stack || 'No stack trace'}</pre>
+          </div>
+        `;
+      }
+      
+      btn.disabled = false;
+    }
+    
+    // Auto-verificar si hay token
+    window.addEventListener('load', () => {
+      const token = localStorage.getItem('github_token');
+      if (token) {
+        checkPermissions();
+      }
+    });
+  </script>
+</body>
+</html>

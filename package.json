@@ -1,0 +1,49 @@
+{
+  "name": "resumenpr",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@editorjs/code": "^2.9.3",
+    "@editorjs/delimiter": "^1.4.2",
+    "@editorjs/editorjs": "^2.31.0",
+    "@editorjs/embed": "^2.7.6",
+    "@editorjs/header": "^2.8.8",
+    "@editorjs/image": "^2.10.3",
+    "@editorjs/inline-code": "^1.5.2",
+    "@editorjs/link": "^2.6.2",
+    "@editorjs/list": "^2.0.8",
+    "@editorjs/paragraph": "^2.11.7",
+    "@editorjs/quote": "^2.7.6",
+    "@editorjs/table": "^2.4.5",
+    "@editorjs/text-variant-tune": "^1.0.3",
+    "@google/generative-ai": "^0.24.1",
+    "@sotaproject/strikethrough": "^1.0.1",
+    "@tailwindcss/postcss": "^4.1.16",
+    "axios": "^1.13.1",
+    "editorjs-change-case": "^0.0.3",
+    "editorjs-drag-drop": "^1.1.16",
+    "editorjs-parser": "^1.5.3",
+    "editorjs-style": "^3.0.3",
+    "editorjs-undo": "^2.0.28",
+    "jspdf": "^3.0.3",
+    "pinia": "^3.0.3",
+    "vue": "^3.5.22",
+    "vue-router": "^4.6.3"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.1",
+    "autoprefixer": "^10.4.21",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^3.4.18",
+    "vite": "npm:rolldown-vite@7.1.14"
+  },
+  "overrides": {
+    "vite": "npm:rolldown-vite@7.1.14"
+  }
+}
