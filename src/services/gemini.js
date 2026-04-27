@@ -66,6 +66,10 @@ function isTemporaryOverloadError(error) {
   )
 }
 
+function shouldTryNextModel(error) {
+  return isModelAvailabilityError(error) || isTemporaryOverloadError(error)
+}
+
 function toUserFriendlyError(error) {
   const message = normalizeErrorMessage(error)
   const status = error?.status || error?.code
@@ -152,11 +156,11 @@ export async function generatePRSummary(prData, language = 'es', reportType = 'e
       } catch (attemptError) {
         lastError = attemptError
 
-        if (!isModelAvailabilityError(attemptError)) {
+        if (!shouldTryNextModel(attemptError)) {
           throw attemptError
         }
 
-        console.warn(`Modelo ${MODEL_CANDIDATES[modelIndex]} no disponible, probando siguiente...`, attemptError)
+        console.warn(`Modelo ${MODEL_CANDIDATES[modelIndex]} falló, probando siguiente...`, attemptError)
       }
     }
 
