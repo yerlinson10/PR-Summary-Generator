@@ -238,14 +238,17 @@ onMounted(() => {
 })
 
 const saveGeminiToken = () => {
-  if (!geminiToken.value) {
+  const cleanToken = geminiToken.value.trim()
+
+  if (!cleanToken) {
     alert('Por favor ingresa un token válido')
     return
   }
   
   try {
-    initializeGemini(geminiToken.value)
-    configStore.setGeminiToken(geminiToken.value)
+    initializeGemini(cleanToken)
+    configStore.setGeminiToken(cleanToken)
+    geminiToken.value = cleanToken
     showSuccess('Token de Gemini guardado correctamente')
   } catch (error) {
     alert('Error al guardar el token. Verifica que sea válido.')

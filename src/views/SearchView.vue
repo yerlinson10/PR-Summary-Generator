@@ -346,7 +346,7 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { getUserRepositories, searchPullRequests, getPRDetails, searchCommitsByAuthor } from '@/services/github'
-import { generatePRSummary, isGeminiConfigured, REPORT_TYPES } from '@/services/gemini'
+import { generatePRSummary, initializeGemini, isGeminiConfigured, REPORT_TYPES } from '@/services/gemini'
 import NavBar from '@/components/NavBar.vue'
 
 const router = useRouter()
@@ -404,6 +404,12 @@ onMounted(async () => {
   // Check Gemini configuration
   if (!configStore.geminiToken) {
     error.value = 'Por favor configura tu token de Gemini AI en Configuración'
+  } else if (!isGeminiConfigured()) {
+    try {
+      initializeGemini(configStore.geminiToken)
+    } catch (err) {
+      error.value = 'No se pudo inicializar Gemini. Revisa tu API Key en Configuración.'
+    }
   }
 })
 
@@ -440,6 +446,15 @@ async function handleSearch() {
   if (!configStore.geminiToken) {
     error.value = 'Por favor configura tu token de Gemini AI en Configuración'
     return
+  }
+
+  if (!isGeminiConfigured()) {
+    try {
+      initializeGemini(configStore.geminiToken)
+    } catch (err) {
+      error.value = 'No se pudo inicializar Gemini. Revisa tu API Key en Configuración.'
+      return
+    }
   }
   
   loading.value = true

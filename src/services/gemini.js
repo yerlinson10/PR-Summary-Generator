@@ -2,6 +2,72 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 
 let genAI = null
 let model = null
+let currentApiKey = null
+let activeModelIndex = 0
+const MODEL_CANDIDATES = [
+  'gemini-2.5-flash',
+  'gemini-2.0-flash',
+  'gemini-2.0-flash-lite',
+  'gemini-1.5-flash'
+]
+
+function buildModel(modelName) {
+  return genAI.getGenerativeModel({
+    model: modelName,
+    generationConfig: {
+      temperature: 0.7,
+      topK: 40,
+      topP: 0.95,
+      maxOutputTokens: 8192
+    }
+  })
+}
+
+function setActiveModel(index) {
+  activeModelIndex = index
+  model = buildModel(MODEL_CANDIDATES[index])
+}
+
+function normalizeErrorMessage(error) {
+  return (error?.message || '').toLowerCase()
+}
+
+function isModelAvailabilityError(error) {
+  const message = normalizeErrorMessage(error)
+  const status = error?.status || error?.code
+
+  return (
+    status === 404 ||
+    message.includes('not found') ||
+    message.includes('model') && message.includes('supported') ||
+    message.includes('is not supported') ||
+    message.includes('unknown model') ||
+    message.includes('deprecated')
+  )
+}
+
+function toUserFriendlyError(error) {
+  const message = normalizeErrorMessage(error)
+  const status = error?.status || error?.code
+
+  if (message.includes('api key') || message.includes('api_key') || status === 401 || status === 403) {
+    return new Error('API Key inválida o sin permisos. Verifica tu token de Gemini en Configuración.')
+  }
+
+  if (
+    message.includes('quota') ||
+    message.includes('rate limit') ||
+    status === 429
+  ) {
+    return new Error('Has excedido el límite de solicitudes de Gemini. Intenta nuevamente en unos minutos.')
+  }
+
+  if (isModelAvailabilityError(error)) {
+    return new Error('No hay modelos de IA disponibles para tu cuenta en este momento. Intenta de nuevo más tarde.')
+  }
+
+  return new Error(`Error al generar resumen: ${error.message || 'Error desconocido'}`)
+}
 
 export function initializeGemini(apiKey) {
   if (!apiKey) {
@@ -9,16 +75,10 @@ export function initializeGemini(apiKey) {
   }
   
   try {
-    genAI = new GoogleGenerativeAI(apiKey)
-    model = genAI.getGenerativeModel({ 
-      model: 'gemini-2.0-flash-exp',
-      generationConfig: {
-        temperature: 0.7,
-        topK: 40,
-        topP: 0.95,
-        maxOutputTokens: 8192,
-      }
-    })
+    const cleanApiKey = apiKey.trim()
+    genAI = new GoogleGenerativeAI(cleanApiKey)
+    currentApiKey = cleanApiKey
+    setActiveModel(0)
     return true
   } catch (error) {
     console.error('Error initializing Gemini:', error)
@@ -34,28 +94,40 @@ export async function generatePRSummary(prData, language = 'es', reportType = 'e
   const prompt = createSummaryPrompt(prData, language, reportType)
   
   try {
-    const result = await model.generateContent(prompt)
-    const response = await result.response
-    const text = response.text()
-    
-    if (!text) {
-      throw new Error('La respuesta de Gemini está vacía')
+    const modelOrder = [
+      activeModelIndex,
+      ...MODEL_CANDIDATES.map((_, index) => index).filter(index => index !== activeModelIndex)
+    ]
+
+    let lastError = null
+
+    for (const modelIndex of modelOrder) {
+      try {
+        setActiveModel(modelIndex)
+        const result = await model.generateContent(prompt)
+        const response = await result.response
+        const text = response.text()
+
+        if (!text) {
+          throw new Error('La respuesta de Gemini está vacía')
+        }
+
+        return text
+      } catch (attemptError) {
+        lastError = attemptError
+
+        if (!isModelAvailabilityError(attemptError)) {
+          throw attemptError
+        }
+
+        console.warn(`Modelo ${MODEL_CANDIDATES[modelIndex]} no disponible, probando siguiente...`, attemptError)
+      }
     }
-    
-    return text
+
+    throw lastError || new Error('No se pudo obtener respuesta de ningún modelo de Gemini')
   } catch (error) {
     console.error('Error generating summary:', error)
-    
-    // Mensajes de error más específicos
-    if (error.message?.includes('API key')) {
-      throw new Error('API Key inválida. Por favor verifica tu token de Gemini en Configuración.')
-    } else if (error.message?.includes('quota')) {
-      throw new Error('Has excedido el límite de solicitudes. Intenta nuevamente en unos minutos.')
-    } else if (error.message?.includes('not found')) {
-      throw new Error('El modelo de IA no está disponible. Por favor contacta al soporte.')
-    } else {
-      throw new Error(`Error al generar resumen: ${error.message || 'Error desconocido'}`)
-    }
+    throw toUserFriendlyError(error)
   }
 }
 
