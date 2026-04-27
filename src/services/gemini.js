@@ -6,9 +6,8 @@ let currentApiKey = null
 let activeModelIndex = 0
 const MODEL_CANDIDATES = [
   'gemini-2.5-flash',
-  'gemini-2.0-flash',
-  'gemini-2.0-flash-lite',
-  'gemini-1.5-flash'
+  'gemini-2.5-flash-lite',
+  'gemini-2.5-pro'
 ]
 const MAX_RETRIES_PER_MODEL = 3
 const RETRY_DELAYS_MS = [800, 1800, 3200]
@@ -144,6 +143,11 @@ export async function generatePRSummary(prData, language = 'es', reportType = 'e
 
             return text
           } catch (attemptError) {
+            // Si falla en el primer intento, cambiar de modelo inmediatamente.
+            if (attempt === 0 && shouldTryNextModel(attemptError)) {
+              throw attemptError
+            }
+
             // Si hay sobrecarga temporal, esperar y reintentar en el mismo modelo.
             if (isTemporaryOverloadError(attemptError) && attempt < MAX_RETRIES_PER_MODEL - 1) {
               await sleep(RETRY_DELAYS_MS[attempt] || RETRY_DELAYS_MS[RETRY_DELAYS_MS.length - 1])
