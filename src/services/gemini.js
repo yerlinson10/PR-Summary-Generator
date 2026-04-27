@@ -10,6 +10,8 @@ const MODEL_CANDIDATES = [
   'gemini-2.0-flash-lite',
   'gemini-1.5-flash'
 ]
+const MAX_RETRIES_PER_MODEL = 3
+const RETRY_DELAYS_MS = [800, 1800, 3200]
 
 function buildModel(modelName) {
   return genAI.getGenerativeModel({
@@ -32,6 +34,10 @@ function normalizeErrorMessage(error) {
   return (error?.message || '').toLowerCase()
 }
 
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
 function isModelAvailabilityError(error) {
   const message = normalizeErrorMessage(error)
   const status = error?.status || error?.code
@@ -46,9 +52,27 @@ function isModelAvailabilityError(error) {
   )
 }
 
+function isTemporaryOverloadError(error) {
+  const message = normalizeErrorMessage(error)
+  const status = error?.status || error?.code
+
+  return (
+    status === 503 ||
+    String(status).toUpperCase() === 'UNAVAILABLE' ||
+    message.includes('unavailable') ||
+    message.includes('high demand') ||
+    message.includes('try again later') ||
+    message.includes('temporarily')
+  )
+}
+
 function toUserFriendlyError(error) {
   const message = normalizeErrorMessage(error)
   const status = error?.status || error?.code
+
+  if (isTemporaryOverloadError(error)) {
+    return new Error('Gemini está con alta demanda en este momento. Intenta nuevamente en 1-2 minutos.')
+  }
 
   if (message.includes('api key') || message.includes('api_key') || status === 401 || status === 403) {
     return new Error('API Key inválida o sin permisos. Verifica tu token de Gemini en Configuración.')
@@ -104,15 +128,27 @@ export async function generatePRSummary(prData, language = 'es', reportType = 'e
     for (const modelIndex of modelOrder) {
       try {
         setActiveModel(modelIndex)
-        const result = await model.generateContent(prompt)
-        const response = await result.response
-        const text = response.text()
+        for (let attempt = 0; attempt < MAX_RETRIES_PER_MODEL; attempt++) {
+          try {
+            const result = await model.generateContent(prompt)
+            const response = await result.response
+            const text = response.text()
 
-        if (!text) {
-          throw new Error('La respuesta de Gemini está vacía')
+            if (!text) {
+              throw new Error('La respuesta de Gemini está vacía')
+            }
+
+            return text
+          } catch (attemptError) {
+            // Si hay sobrecarga temporal, esperar y reintentar en el mismo modelo.
+            if (isTemporaryOverloadError(attemptError) && attempt < MAX_RETRIES_PER_MODEL - 1) {
+              await sleep(RETRY_DELAYS_MS[attempt] || RETRY_DELAYS_MS[RETRY_DELAYS_MS.length - 1])
+              continue
+            }
+
+            throw attemptError
+          }
         }
-
-        return text
       } catch (attemptError) {
         lastError = attemptError
 
